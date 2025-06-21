@@ -1,19 +1,32 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart } from 'lucide-react';
 import { useProductStore } from '../store/productStore';
 
 const ProductGrid = () => {
-  const { products } = useProductStore();
+  const { products, loading, fetchProducts } = useProductStore();
 
-  const handleQuickBuy = (e, product) => {
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  const handleQuickBuy = (e: React.MouseEvent, product: any) => {
     e.preventDefault();
     e.stopPropagation();
     const message = `Hi! I'm interested in buying ${product.name} for ₹${product.price}. Please let me know the availability.`;
     const whatsappUrl = `https://wa.me/919168585280?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="text-gray-500 mt-4">Loading products...</p>
+      </div>
+    );
+  }
 
   if (products.length === 0) {
     return (
@@ -34,7 +47,7 @@ const ProductGrid = () => {
         >
           <div className="aspect-square overflow-hidden">
             <img
-              src={product.images[0]}
+              src={product.images[0] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop'}
               alt={product.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
             />

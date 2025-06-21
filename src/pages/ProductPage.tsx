@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart } from 'lucide-react';
 import Header from '../components/Header';
@@ -9,8 +9,38 @@ import { useProductStore } from '../store/productStore';
 
 const ProductPage = () => {
   const { id } = useParams<{ id: string }>();
-  const { products } = useProductStore();
-  const product = products.find(p => p.id === parseInt(id || '0'));
+  const { products, fetchProducts } = useProductStore();
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadProduct = async () => {
+      if (products.length === 0) {
+        await fetchProducts();
+      }
+      
+      const foundProduct = products.find(p => p.id === id);
+      setProduct(foundProduct);
+      setLoading(false);
+    };
+
+    if (id) {
+      loadProduct();
+    }
+  }, [id, products, fetchProducts]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <Header />
+        <div className="container mx-auto px-4 py-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading product...</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -18,8 +48,8 @@ const ProductPage = () => {
         <Header />
         <div className="container mx-auto px-4 py-8 text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Product not found</h2>
-          <Link to="/" className="text-blue-600 hover:text-blue-800">
-            Return to Home
+          <Link to="/products" className="text-blue-600 hover:text-blue-800">
+            Return to Products
           </Link>
         </div>
         <Footer />
@@ -37,14 +67,14 @@ const ProductPage = () => {
     <div className="min-h-screen bg-white">
       <Header />
       <div className="container mx-auto px-4 py-8">
-        <Link to="/" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors">
+        <Link to="/products" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Products
         </Link>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div>
-            <ProductCarousel images={product.images} />
+            <ProductCarousel images={product.images.length > 0 ? product.images : ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop']} />
           </div>
           
           <div className="space-y-6">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Edit2, Trash2, ArrowLeft, LogOut } from 'lucide-react';
@@ -7,7 +8,7 @@ import AdminAuth from '../components/AdminAuth';
 
 const AdminPanel = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const { products, deleteProduct } = useProductStore();
+  const { products, fetchProducts, deleteProduct } = useProductStore();
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
@@ -15,6 +16,12 @@ const AdminPanel = () => {
     const authStatus = localStorage.getItem('adminAuth');
     setIsAuthenticated(authStatus === 'true');
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProducts();
+    }
+  }, [isAuthenticated, fetchProducts]);
 
   const handleLogin = (success: boolean) => {
     setIsAuthenticated(success);
@@ -25,14 +32,14 @@ const AdminPanel = () => {
     setIsAuthenticated(false);
   };
 
-  const handleEdit = (product) => {
+  const handleEdit = (product: any) => {
     setEditingProduct(product);
     setShowForm(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      deleteProduct(id);
+      await deleteProduct(id);
     }
   };
 
@@ -104,7 +111,7 @@ const AdminPanel = () => {
                         <div className="flex items-center">
                           <img
                             className="h-12 w-12 rounded-lg object-cover"
-                            src={product.images[0]}
+                            src={product.images[0] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop'}
                             alt={product.name}
                           />
                           <div className="ml-4">

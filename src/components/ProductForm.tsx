@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useProductStore } from '../store/productStore';
+import ImageUpload from './ImageUpload';
 
 interface ProductFormProps {
   product?: any;
@@ -9,43 +10,49 @@ interface ProductFormProps {
 }
 
 const ProductForm = ({ product, onClose }: ProductFormProps) => {
-  const { addProduct, updateProduct } = useProductStore();
+  const { addProduct, updateProduct, uploadProductImages } = useProductStore();
   const [formData, setFormData] = useState({
     name: product?.name || '',
     price: product?.price || '',
     category: product?.category || '',
     description: product?.description || '',
-    images: product?.images?.join('\n') || ''
+    images: product?.images || []
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const productData = {
       ...formData,
-      price: parseFloat(formData.price),
-      images: formData.images.split('\n').filter(url => url.trim()),
+      price: parseFloat(formData.price as string),
       id: product?.id
     };
 
     if (product) {
-      updateProduct(productData);
+      await updateProduct(productData);
     } else {
-      addProduct(productData);
+      await addProduct(productData);
     }
     
     onClose();
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
   };
 
+  const handleImagesChange = (images: string[]) => {
+    setFormData({
+      ...formData,
+      images
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">
             {product ? 'Edit Product' : 'Add Product'}
@@ -58,7 +65,7 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Product Name
@@ -118,17 +125,14 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Image URLs (one per line)
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Product Images
             </label>
-            <textarea
-              name="images"
-              value={formData.images}
-              onChange={handleChange}
-              required
-              rows={4}
-              placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            <ImageUpload
+              images={formData.images}
+              onImagesChange={handleImagesChange}
+              onUpload={uploadProductImages}
+              maxFiles={5}
             />
           </div>
           
