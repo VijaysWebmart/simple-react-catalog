@@ -18,22 +18,36 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
     description: product?.description || '',
     images: product?.images || []
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const productData = {
-      ...formData,
-      price: parseFloat(formData.price as string),
-      id: product?.id
-    };
-
-    if (product) {
-      await updateProduct(productData);
-    } else {
-      await addProduct(productData);
-    }
+    setIsSubmitting(true);
     
-    onClose();
+    try {
+      const productData = {
+        name: formData.name,
+        price: parseFloat(formData.price as string),
+        category: formData.category,
+        description: formData.description,
+        images: formData.images
+      };
+
+      if (product) {
+        await updateProduct({
+          ...productData,
+          id: product.id
+        });
+      } else {
+        await addProduct(productData);
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error('Error saving product:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -139,14 +153,16 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
           <div className="flex space-x-3 pt-4">
             <button
               type="submit"
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg transition-colors"
             >
-              {product ? 'Update Product' : 'Add Product'}
+              {isSubmitting ? 'Saving...' : (product ? 'Update Product' : 'Add Product')}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 disabled:bg-gray-200 text-gray-700 py-2 px-4 rounded-lg transition-colors"
             >
               Cancel
             </button>
