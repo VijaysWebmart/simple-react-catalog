@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart } from 'lucide-react';
 import Header from '../components/Header';
 import ProductCarousel from '../components/ProductCarousel';
+import Footer from '../components/Footer';
 import { useProductStore } from '../store/productStore';
 
 const ProductPage = () => {
@@ -21,6 +22,7 @@ const ProductPage = () => {
             Return to Home
           </Link>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -73,6 +75,7 @@ const ProductPage = () => {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

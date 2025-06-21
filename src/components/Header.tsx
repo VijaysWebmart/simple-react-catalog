@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingBag, Settings } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 
 const Header = () => {
   return (
@@ -17,24 +17,22 @@ const Header = () => {
             <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors">
               Home
             </Link>
-            <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors">
+            <Link to="/products" className="text-gray-700 hover:text-blue-600 transition-colors">
               Products
             </Link>
-            <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors">
+            <Link to="/about" className="text-gray-700 hover:text-blue-600 transition-colors">
               About
             </Link>
-            <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors">
+            <Link to="/contact" className="text-gray-700 hover:text-blue-600 transition-colors">
               Contact
             </Link>
           </nav>
           
-          <Link
-            to="/admin"
-            className="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Admin</span>
-          </Link>
+          <div className="flex items-center space-x-4">
+            <div className="hidden sm:block text-sm text-gray-600">
+              Call: +91 9168585280
+            </div>
+          </div>
         </div>
       </div>
     </header>
