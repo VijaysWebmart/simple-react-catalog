@@ -18,7 +18,18 @@ serve(async (req) => {
     const PHONEPE_CLIENT_ID = Deno.env.get('PHONEPE_CLIENT_ID')
     const PHONEPE_CLIENT_SECRET = Deno.env.get('PHONEPE_CLIENT_SECRET')
 
+    console.log('PhonePe credentials check:', {
+      hasClientId: !!PHONEPE_CLIENT_ID,
+      hasClientSecret: !!PHONEPE_CLIENT_SECRET,
+      clientIdLength: PHONEPE_CLIENT_ID?.length,
+      secretLength: PHONEPE_CLIENT_SECRET?.length
+    })
+
     if (!PHONEPE_CLIENT_ID || !PHONEPE_CLIENT_SECRET) {
+      console.error('PhonePe credentials missing:', {
+        PHONEPE_CLIENT_ID: !!PHONEPE_CLIENT_ID,
+        PHONEPE_CLIENT_SECRET: !!PHONEPE_CLIENT_SECRET
+      })
       throw new Error('PhonePe credentials not configured')
     }
 
@@ -40,16 +51,23 @@ serve(async (req) => {
       }
     }
 
+    console.log('Payment payload:', JSON.stringify(paymentPayload, null, 2))
+
     // Encode payload
     const base64Payload = btoa(JSON.stringify(paymentPayload))
+    console.log('Base64 payload:', base64Payload)
     
     // Create checksum
     const checksumString = base64Payload + '/pg/v1/pay' + PHONEPE_CLIENT_SECRET
+    console.log('Checksum string length:', checksumString.length)
+    
     const encoder = new TextEncoder()
     const data = encoder.encode(checksumString)
     const hashBuffer = await crypto.subtle.digest('SHA-256', data)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const checksum = hashArray.map(b => b.toString(16).padStart(2, '0')).join('') + '###1'
+
+    console.log('Generated checksum:', checksum)
 
     // Make request to PhonePe
     const response = await fetch(`${PHONEPE_BASE_URL}/pg/v1/pay`, {
@@ -65,7 +83,7 @@ serve(async (req) => {
     })
 
     const result = await response.json()
-    console.log('PhonePe response:', result)
+    console.log('PhonePe response:', JSON.stringify(result, null, 2))
 
     if (result.success && result.data?.instrumentResponse?.redirectInfo?.url) {
       return new Response(
@@ -80,13 +98,17 @@ serve(async (req) => {
         }
       )
     } else {
+      console.error('PhonePe payment failed:', result)
       throw new Error(result.message || 'Payment initiation failed')
     }
 
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Error in phonepe-payment function:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Check function logs for more information'
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, ArrowLeft, LogOut, Image } from 'lucide-react';
+import { Plus, Edit2, Trash2, ArrowLeft, LogOut, Image, ShoppingBag } from 'lucide-react';
 import { useProductStore } from '../store/productStore';
 import { useSliderStore } from '../store/sliderStore';
 import ProductForm from '../components/ProductForm';
 import SliderForm from '../components/SliderForm';
+import OrdersTable from '../components/OrdersTable';
 import AdminAuth from '../components/AdminAuth';
 
 const AdminPanel = () => {
@@ -95,7 +96,7 @@ const AdminPanel = () => {
                   <Plus className="w-4 h-4" />
                   Add Product
                 </button>
-              ) : (
+              ) : activeTab === 'sliders' ? (
                 <button
                   onClick={() => setShowSliderForm(true)}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -103,7 +104,7 @@ const AdminPanel = () => {
                   <Image className="w-4 h-4" />
                   Add Slider
                 </button>
-              )}
+              ) : null}
               <button
                 onClick={handleLogout}
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -141,9 +142,23 @@ const AdminPanel = () => {
               >
                 Slider Images ({sliderImages.length})
               </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'orders'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4 inline mr-1" />
+                Orders
+              </button>
             </nav>
           </div>
         </div>
+
+        {/* Orders Tab */}
+        {activeTab === 'orders' && <OrdersTable />}
 
         {/* Products Tab */}
         {activeTab === 'products' && (
