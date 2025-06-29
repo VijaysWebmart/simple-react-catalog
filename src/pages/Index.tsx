@@ -6,6 +6,8 @@ import ProductPage from './ProductPage';
 import AboutPage from './AboutPage';
 import ContactPage from './ContactPage';
 import AdminPanel from './AdminPanel';
+import AuthPage from './AuthPage';
+import PaymentCallbackPage from './PaymentCallbackPage';
 
 const Index = () => {
   return (
@@ -17,6 +19,8 @@ const Index = () => {
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/payment-callback" element={<PaymentCallbackPage />} />
       </Routes>
     </div>
   );

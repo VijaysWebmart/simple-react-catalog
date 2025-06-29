@@ -1,15 +1,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Plus } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import AuthenticatedHeader from '../components/AuthenticatedHeader';
 import ProductCarousel from '../components/ProductCarousel';
 import Footer from '../components/Footer';
 import { useProductStore } from '../store/productStore';
+import { useCartStore } from '../store/cartStore';
+import { toast } from 'sonner';
 
 const ProductPage = () => {
   const { id } = useParams<{ id: string }>();
   const { products, fetchProducts } = useProductStore();
+  const { addToCart } = useCartStore();
+  const { user } = useAuth();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,10 +35,30 @@ const ProductPage = () => {
     }
   }, [id, products, fetchProducts]);
 
+  const handleAddToCart = async () => {
+    if (!user) {
+      toast.error('Please login to add items to cart');
+      return;
+    }
+
+    try {
+      await addToCart(product.id, 1);
+      toast.success(`${product.name} added to cart!`);
+    } catch (error) {
+      toast.error('Failed to add item to cart');
+    }
+  };
+
+  const handleBuyNow = () => {
+    const message = `Hi! I'm interested in buying ${product.name} for ₹${product.price}. Please let me know the availability.`;
+    const whatsappUrl = `https://wa.me/919168585280?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white">
-        <Header />
+        {user ? <AuthenticatedHeader /> : <Header />}
         <div className="container mx-auto px-4 py-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-500">Loading product...</p>
@@ -45,7 +71,7 @@ const ProductPage = () => {
   if (!product) {
     return (
       <div className="min-h-screen bg-white">
-        <Header />
+        {user ? <AuthenticatedHeader /> : <Header />}
         <div className="container mx-auto px-4 py-8 text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Product not found</h2>
           <Link to="/products" className="text-blue-600 hover:text-blue-800">
@@ -57,15 +83,9 @@ const ProductPage = () => {
     );
   }
 
-  const handleBuyNow = () => {
-    const message = `Hi! I'm interested in buying ${product.name} for ₹${product.price}. Please let me know the availability.`;
-    const whatsappUrl = `https://wa.me/919168585280?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      {user ? <AuthenticatedHeader /> : <Header />}
       <div className="container mx-auto px-4 py-8">
         <Link to="/products" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -95,13 +115,24 @@ const ProductPage = () => {
               </span>
             </div>
             
-            <button
-              onClick={handleBuyNow}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              Buy Now via WhatsApp
-            </button>
+            <div className="flex space-x-4">
+              {user && (
+                <button
+                  onClick={handleAddToCart}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add to Cart
+                </button>
+              )}
+              <button
+                onClick={handleBuyNow}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                Buy Now via WhatsApp
+              </button>
+            </div>
           </div>
         </div>
       </div>
