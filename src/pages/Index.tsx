@@ -7,6 +7,7 @@ import AboutPage from './AboutPage';
 import ContactPage from './ContactPage';
 import AdminPanel from './AdminPanel';
 import AuthPage from './AuthPage';
+import CartPage from './CartPage';
 import PaymentCallbackPage from './PaymentCallbackPage';
 
 const Index = () => {
@@ -18,6 +19,7 @@ const Index = () => {
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/cart" element={<CartPage />} />
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/payment-callback" element={<PaymentCallbackPage />} />
