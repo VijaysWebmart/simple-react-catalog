@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useProductStore } from '../store/productStore';
+import { supabase } from '../integrations/supabase/client';
 import ImageUpload from './ImageUpload';
 
 interface ProductFormProps {
@@ -11,14 +12,39 @@ interface ProductFormProps {
 
 const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const { addProduct, updateProduct, uploadProductImages } = useProductStore();
+  const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
     name: product?.name || '',
     price: product?.price || '',
     category: product?.category || '',
     description: product?.description || '',
-    images: product?.images || []
+    images: product?.images || [],
+    sku: product?.sku || '',
+    stock_quantity: product?.stock_quantity || 0,
+    is_active: product?.is_active !== undefined ? product.is_active : true,
+    is_featured: product?.is_featured !== undefined ? product.is_featured : false,
+    variants: product?.variants || []
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +56,12 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
         price: parseFloat(formData.price as string),
         category: formData.category,
         description: formData.description,
-        images: formData.images
+        images: formData.images,
+        sku: formData.sku || null,
+        stock_quantity: parseInt(formData.stock_quantity as string) || 0,
+        is_active: formData.is_active,
+        is_featured: formData.is_featured,
+        variants: formData.variants
       };
 
       if (product) {
@@ -50,10 +81,11 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     });
   };
 
@@ -80,48 +112,86 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Product Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Product Name
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                SKU
+              </label>
+              <input
+                type="text"
+                name="sku"
+                value={formData.sku}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Product SKU"
+              />
+            </div>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Price (₹)
-            </label>
-            <input
-              type="number"
-              name="price"
-              value={formData.price}
-              onChange={handleChange}
-              required
-              min="0"
-              step="0.01"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Price (₹)
+              </label>
+              <input
+                type="number"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                required
+                min="0"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stock Quantity
+              </label>
+              <input
+                type="number"
+                name="stock_quantity"
+                value={formData.stock_quantity}
+                onChange={handleChange}
+                min="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Category
             </label>
-            <input
-              type="text"
+            <select
               name="category"
               value={formData.category}
               onChange={handleChange}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            >
+              <option value="">Select a category</option>
+              {categories.map((category: any) => (
+                <option key={category.id} value={category.name}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </div>
           
           <div>
@@ -136,6 +206,36 @@ const ProductForm = ({ product, onClose }: ProductFormProps) => {
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="is_active"
+                name="is_active"
+                checked={formData.is_active}
+                onChange={handleChange}
+                className="mr-2"
+              />
+              <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
+                Active
+              </label>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="is_featured"
+                name="is_featured"
+                checked={formData.is_featured}
+                onChange={handleChange}
+                className="mr-2"
+              />
+              <label htmlFor="is_featured" className="text-sm font-medium text-gray-700">
+                Featured
+              </label>
+            </div>
           </div>
           
           <div>
