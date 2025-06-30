@@ -22,7 +22,9 @@ serve(async (req) => {
       hasClientId: !!PHONEPE_CLIENT_ID,
       hasClientSecret: !!PHONEPE_CLIENT_SECRET,
       clientIdLength: PHONEPE_CLIENT_ID?.length,
-      secretLength: PHONEPE_CLIENT_SECRET?.length
+      secretLength: PHONEPE_CLIENT_SECRET?.length,
+      clientIdPrefix: PHONEPE_CLIENT_ID?.substring(0, 8) + '...',
+      secretPrefix: PHONEPE_CLIENT_SECRET?.substring(0, 8) + '...'
     })
 
     if (!PHONEPE_CLIENT_ID || !PHONEPE_CLIENT_SECRET) {
@@ -42,7 +44,7 @@ serve(async (req) => {
     // Use UAT (sandbox) environment for testing
     const PHONEPE_BASE_URL = 'https://api-preprod.phonepe.com/apis/pg-sandbox'
 
-    // Create payment payload
+    // Create payment payload with proper structure
     const paymentPayload = {
       merchantId: PHONEPE_CLIENT_ID,
       merchantTransactionId: merchantTransactionId,
@@ -61,11 +63,17 @@ serve(async (req) => {
 
     // Encode payload to base64
     const base64Payload = btoa(JSON.stringify(paymentPayload))
-    console.log('Base64 payload:', base64Payload)
+    console.log('Base64 payload created, length:', base64Payload.length)
     
     // Create checksum: base64Payload + endpoint + saltKey
-    const checksumString = base64Payload + '/pg/v1/pay' + PHONEPE_CLIENT_SECRET
-    console.log('Creating checksum for string length:', checksumString.length)
+    const endpoint = '/pg/v1/pay'
+    const checksumString = base64Payload + endpoint + PHONEPE_CLIENT_SECRET
+    console.log('Checksum string components:', {
+      base64Length: base64Payload.length,
+      endpoint: endpoint,
+      secretLength: PHONEPE_CLIENT_SECRET.length,
+      totalLength: checksumString.length
+    })
     
     const encoder = new TextEncoder()
     const data = encoder.encode(checksumString)
@@ -75,24 +83,31 @@ serve(async (req) => {
 
     console.log('Generated checksum:', checksum)
 
+    // Prepare headers
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-VERIFY': checksum,
+      'accept': 'application/json'
+    }
+
+    console.log('Request headers:', headers)
+
     // Make request to PhonePe
-    const response = await fetch(`${PHONEPE_BASE_URL}/pg/v1/pay`, {
+    const response = await fetch(`${PHONEPE_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-VERIFY': checksum,
-        'accept': 'application/json'
-      },
+      headers: headers,
       body: JSON.stringify({
         request: base64Payload
       })
     })
 
     const result = await response.json()
-    console.log('PhonePe API response:', JSON.stringify(result, null, 2))
-    console.log('Response status:', response.status)
+    console.log('PhonePe API response status:', response.status)
+    console.log('PhonePe API response headers:', Object.fromEntries(response.headers.entries()))
+    console.log('PhonePe API response body:', JSON.stringify(result, null, 2))
 
     if (result.success && result.data?.instrumentResponse?.redirectInfo?.url) {
+      console.log('Payment initiated successfully')
       return new Response(
         JSON.stringify({
           success: true,
@@ -109,12 +124,16 @@ serve(async (req) => {
         success: result.success,
         code: result.code,
         message: result.message,
-        data: result.data
+        data: result.data,
+        responseStatus: response.status
       })
       
       let errorMessage = 'Payment initiation failed. '
+      
       if (result.code === 'KEY_NOT_CONFIGURED') {
-        errorMessage += 'Merchant credentials are not properly configured. Please contact support.'
+        errorMessage += 'Merchant key configuration issue. Please verify your PhonePe merchant credentials are properly configured in the PhonePe dashboard and match the sandbox/production environment.'
+      } else if (result.code === 'INVALID_REQUEST') {
+        errorMessage += 'Invalid request format. Please contact support.'
       } else if (result.message) {
         errorMessage += result.message
       } else {
@@ -125,7 +144,12 @@ serve(async (req) => {
         JSON.stringify({ 
           error: errorMessage,
           code: result.code || 'PAYMENT_FAILED',
-          details: result.data || {}
+          details: result.data || {},
+          debug: {
+            merchantId: PHONEPE_CLIENT_ID,
+            environment: 'sandbox',
+            endpoint: `${PHONEPE_BASE_URL}${endpoint}`
+          }
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
