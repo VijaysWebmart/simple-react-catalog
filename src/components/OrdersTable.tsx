@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Eye, Package, Truck, CheckCircle, XCircle } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
@@ -17,7 +16,7 @@ interface Order {
   profiles?: {
     full_name?: string;
     email?: string;
-  };
+  } | null;
   order_items: Array<{
     id: string;
     product_id: string;
@@ -41,11 +40,11 @@ const OrdersTable = () => {
 
   const fetchOrders = async () => {
     try {
-      const { data, error } = await supabase
+      // First get orders with order items
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
           *,
-          profiles:user_id (full_name, email),
           order_items (
             *,
             products (name, images)
@@ -53,8 +52,25 @@ const OrdersTable = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setOrders(data || []);
+      if (ordersError) throw ordersError;
+
+      // Then get profiles separately and merge them
+      const ordersWithProfiles = await Promise.all(
+        (ordersData || []).map(async (order) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', order.user_id)
+            .single();
+
+          return {
+            ...order,
+            profiles: profileData
+          };
+        })
+      );
+
+      setOrders(ordersWithProfiles);
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast.error('Failed to fetch orders');
@@ -160,7 +176,7 @@ const OrdersTable = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{order.profiles?.full_name || 'Unknown'}</div>
-                      <div className="text-sm text-gray-500">{order.profiles?.email}</div>
+                      <div className="text-sm text-gray-500">{order.profiles?.email || 'No email'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       ₹{order.total_amount}
@@ -222,8 +238,8 @@ const OrdersTable = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-medium text-gray-900">Customer Information</h4>
-                  <p className="text-sm text-gray-600">{selectedOrder.profiles?.full_name}</p>
-                  <p className="text-sm text-gray-600">{selectedOrder.profiles?.email}</p>
+                  <p className="text-sm text-gray-600">{selectedOrder.profiles?.full_name || 'Unknown'}</p>
+                  <p className="text-sm text-gray-600">{selectedOrder.profiles?.email || 'No email'}</p>
                 </div>
                 <div>
                   <h4 className="font-medium text-gray-900">Order Information</h4>
