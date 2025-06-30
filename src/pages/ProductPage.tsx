@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Plus } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import AuthenticatedHeader from '../components/AuthenticatedHeader';
@@ -47,12 +47,6 @@ const ProductPage = () => {
     } catch (error) {
       toast.error('Failed to add item to cart');
     }
-  };
-
-  const handleBuyNow = () => {
-    const message = `Hi! I'm interested in buying ${product.name} for ₹${product.price}. Please let me know the availability.`;
-    const whatsappUrl = `https://wa.me/919168585280?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
   };
 
   if (loading) {
@@ -125,13 +119,6 @@ const ProductPage = () => {
                   Add to Cart
                 </button>
               )}
-              <button
-                onClick={handleBuyNow}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                Buy Now via WhatsApp
-              </button>
             </div>
           </div>
         </div>

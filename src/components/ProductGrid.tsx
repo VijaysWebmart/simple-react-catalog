@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useProductStore } from '../store/productStore';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,14 +35,6 @@ const ProductGrid = () => {
     } catch (error) {
       toast.error('Failed to add item to cart');
     }
-  };
-
-  const handleQuickBuy = (e: React.MouseEvent, product: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const message = `Hi! I'm interested in buying ${product.name} for ₹${product.price}. Please let me know the availability.`;
-    const whatsappUrl = `https://wa.me/919168585280?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
   };
 
   if (loading) {
@@ -85,22 +77,13 @@ const ProductGrid = () => {
               <p className="text-sm text-gray-600 mb-2">{product.category}</p>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-bold text-green-600">₹{product.price}</span>
-                <div className="flex space-x-1">
-                  <button
-                    onClick={(e) => handleAddToCart(e, product.id, product.name)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors duration-200"
-                    title="Add to Cart"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => handleQuickBuy(e, product)}
-                    className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-colors duration-200"
-                    title="Quick Buy"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={(e) => handleAddToCart(e, product.id, product.name)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors duration-200"
+                  title="Add to Cart"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </Link>
