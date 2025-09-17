@@ -9,6 +9,11 @@ interface Product {
   category: string;
   description: string;
   images: string[];
+  sku?: string;
+  stock_quantity?: number;
+  is_active?: boolean;
+  is_featured?: boolean;
+  variants?: any;
   created_at?: string;
   updated_at?: string;
 }

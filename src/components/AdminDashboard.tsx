@@ -64,7 +64,7 @@ const AdminDashboard = () => {
       ).length || 0;
 
       const totalRevenue = orders?.reduce((sum, order) => 
-        sum + parseFloat(order.total_amount || 0), 0
+        sum + parseFloat(order.total_amount?.toString() || '0'), 0
       ) || 0;
 
       setStats({
