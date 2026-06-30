@@ -35,7 +35,7 @@ const PaymentCallbackPage = () => {
             <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h2>
             <p className="text-gray-600 mb-4">Your order has been confirmed.</p>
-            <p className="text-sm text-gray-500">Redirecting to home page...</p>
+            <p className="text-sm text-gray-500">Taking you to your order...</p>
           </>
         )}
         {status === 'failed' && (
