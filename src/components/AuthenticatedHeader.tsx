@@ -102,12 +102,12 @@ const AuthenticatedHeader = () => {
                 <Link to="/about" className="text-gray-600 hover:text-gray-900 transition-colors py-2">About</Link>
                 <Link to="/contact" className="text-gray-600 hover:text-gray-900 transition-colors py-2">Contact</Link>
                 {user && (
-                  <button
-                    onClick={handleLogout}
-                    className="text-left text-gray-600 hover:text-gray-900 transition-colors py-2"
-                  >
-                    Logout
-                  </button>
+                  <>
+                    <div className="border-t my-2" />
+                    <Link to="/orders" className="text-gray-600 hover:text-gray-900 transition-colors py-2">My Orders</Link>
+                    <Link to="/profile" className="text-gray-600 hover:text-gray-900 transition-colors py-2">My Profile</Link>
+                    <button onClick={handleLogout} className="text-left text-red-600 hover:text-red-700 transition-colors py-2">Logout</button>
+                  </>
                 )}
               </nav>
             </div>
