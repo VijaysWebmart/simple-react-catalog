@@ -226,6 +226,9 @@ export type Database = {
           id: string
           phonepe_merchant_transaction_id: string | null
           phonepe_transaction_id: string | null
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
           shipping_address: Json | null
           shipping_method: string | null
           status: string
@@ -241,6 +244,9 @@ export type Database = {
           id?: string
           phonepe_merchant_transaction_id?: string | null
           phonepe_transaction_id?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
           shipping_address?: Json | null
           shipping_method?: string | null
           status?: string
@@ -256,6 +262,9 @@ export type Database = {
           id?: string
           phonepe_merchant_transaction_id?: string | null
           phonepe_transaction_id?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
           shipping_address?: Json | null
           shipping_method?: string | null
           status?: string
