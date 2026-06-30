@@ -34,9 +34,8 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
         return;
       }
 
-      // In a real app, you'd verify the password hash here
-      // For now, we'll use a simple check
-      if (formData.password !== 'admin123') {
+      // Verify password against stored value
+      if (!adminUser.password_hash || formData.password !== adminUser.password_hash) {
         toast.error('Invalid credentials');
         return;
       }
