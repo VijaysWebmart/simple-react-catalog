@@ -1,59 +1,55 @@
-# Fix: Checkout fails + Cart page button does nothing
+## Goals
 
-Two real bugs surfaced from the logs:
+1. Let users save multiple shipping addresses, reuse them at checkout, and mark one as default.
+2. Show a default profile avatar (with optional upload) on the profile page and in the header.
+3. Add a floating WhatsApp chat button site-wide.
 
-## Bug 1 — Every order insert fails with a foreign-key error
-The `orders` table has an `orders_audit_trigger` that calls `public.log_admin_activity()` on every INSERT/UPDATE/DELETE. That function inserts a row into `activity_logs` with `admin_id = auth.uid()`. But `activity_logs.admin_id` has a FK to `admin_users(id)`, so when a normal customer (not an admin) places an order, the FK violates and the order insert is aborted:
+---
 
-```
-Key (admin_id)=(3f8d38ff-…) is not present in table "admin_users".
-```
+## 1. Saved Shipping Addresses
 
-This blocks both the old and the new Razorpay flow.
+**New table `public.addresses`** (via migration, with GRANTs + RLS):
+- `id uuid pk`, `user_id uuid` (references profiles), `full_name`, `phone`, `address`, `city`, `state`, `pincode`, `is_default boolean`, `created_at`.
+- RLS: users can select/insert/update/delete only their own rows. Trigger to ensure only one `is_default = true` per user.
 
-### Fix
-Update `public.log_admin_activity()` to only log when the current user is actually an admin (skip silently otherwise). Same change protects the `products_audit_trigger` for any future non-admin product touches.
+**Profile page (`ProfilePage.tsx`)** — new "My Addresses" section:
+- List saved addresses as cards with Edit / Delete / "Set as default" actions.
+- "Add new address" form (same fields as checkout).
 
-```sql
-CREATE OR REPLACE FUNCTION public.log_admin_activity()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF auth.uid() IS NULL OR NOT EXISTS (
-    SELECT 1 FROM public.admin_users WHERE id = auth.uid()
-  ) THEN
-    RETURN COALESCE(NEW, OLD);
-  END IF;
+**Checkout (`CheckoutForm.tsx`)** rework:
+- On open, fetch saved addresses.
+- If any exist: show them as selectable cards (default pre-selected) + "Use a new address" toggle that reveals the existing form.
+- New addresses get an optional "Save this address" checkbox (defaults on); first-ever address auto-becomes default.
+- Selected address is sent as `shipping_address` JSON to the order (no schema change to `orders`).
 
-  INSERT INTO public.activity_logs (admin_id, action, table_name, record_id, old_values, new_values)
-  VALUES (
-    auth.uid(),
-    TG_OP,
-    TG_TABLE_NAME,
-    COALESCE(NEW.id, OLD.id),
-    CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE NULL END,
-    CASE WHEN TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN to_jsonb(NEW) ELSE NULL END
-  );
-  RETURN COALESCE(NEW, OLD);
-END;
-$$;
-```
+**Cart page** — small "Deliver to: <default address summary>  · Change" line above the Order Summary when a default exists, linking to profile addresses.
 
-## Bug 2 — Cart page "Proceed to Checkout" button is dead
-`src/pages/CartPage.tsx` line 128 renders a button with no `onClick`. The cart drawer correctly opens the new Razorpay `CheckoutForm`, but the dedicated `/cart` page button does nothing — so users assume "old gateway / nothing happens".
+---
 
-### Fix
-Wire `CartPage` to the same `CheckoutForm` the drawer uses:
-- Add `useState` for `checkoutOpen`.
-- Make the button call `setCheckoutOpen(true)` (gated on `items.length > 0`).
-- Render `<CheckoutForm isOpen={checkoutOpen} onClose={() => setCheckoutOpen(false)} />`.
+## 2. Profile Image
 
-No other code or schema changes. The Razorpay edge functions and `CheckoutForm` from the previous step stay as-is.
+- Add `avatar_url text` column to `profiles` (migration).
+- `ProfilePage.tsx`: avatar block at top using shadcn `Avatar` with a default placeholder image (initials fallback). "Change photo" uploads to existing `product-images` bucket under an `avatars/` prefix — or create a new public `avatars` bucket (preferred; created via storage tool).
+- `AuthenticatedHeader.tsx`: replace the current account icon with the `Avatar` showing `avatar_url` or initials fallback.
 
-## Verification
-1. Open `/cart` → click **Proceed to Checkout** → checkout modal opens.
-2. Submit shipping form → Razorpay modal opens (no 409, no FK error).
-3. Pay with test card `4111 1111 1111 1111` → order flips to `paid`, redirect to success page.
+---
+
+## 3. WhatsApp Chat Button
+
+- New `src/components/WhatsAppButton.tsx`: fixed bottom-right floating button (green circle, WhatsApp icon from `lucide-react`), opens `https://wa.me/<number>?text=...` in a new tab.
+- Mounted once in `src/App.tsx` so it appears on every page.
+- Phone number read from `store_settings` (existing table) with a hardcoded fallback, so admin can change it later without a code edit.
+
+---
+
+## Technical Notes
+
+- Migrations: `addresses` table + grants + RLS + default-uniqueness trigger; `profiles.avatar_url` column; optional `avatars` storage bucket with public read + owner-write policies.
+- No changes to Razorpay edge functions — `shipping_address` continues to be sent as JSON on the order insert.
+- No business-logic change to order creation flow beyond which address object is attached.
+
+---
+
+## Open Question
+
+What WhatsApp number should the button use by default? (I'll wire it to `store_settings` so it's editable later, but I need a starting value.)
