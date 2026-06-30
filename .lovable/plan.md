@@ -1,95 +1,59 @@
-# Razorpay Payment Gateway Integration Plan
+# Fix: Checkout fails + Cart page button does nothing
 
-Replace the existing PhonePe flow with Razorpay using a secure server-side pattern: order creation and signature verification happen in Supabase Edge Functions, never in the browser.
+Two real bugs surfaced from the logs:
 
-## Goals
-- Accept payments via Razorpay Checkout (cards, UPI, netbanking, wallets).
-- Keep API secret server-side only.
-- Cryptographically verify every payment before marking an order as paid.
-- Minimal frontend changes — same Checkout form UX.
+## Bug 1 — Every order insert fails with a foreign-key error
+The `orders` table has an `orders_audit_trigger` that calls `public.log_admin_activity()` on every INSERT/UPDATE/DELETE. That function inserts a row into `activity_logs` with `admin_id = auth.uid()`. But `activity_logs.admin_id` has a FK to `admin_users(id)`, so when a normal customer (not an admin) places an order, the FK violates and the order insert is aborted:
 
-## Secrets (server-side only)
-Add via `add_secret` (never committed, never exposed to client):
-- `RAZORPAY_KEY_ID` — public-ish key id (used in Checkout).
-- `RAZORPAY_KEY_SECRET` — secret, only inside edge functions.
-- `RAZORPAY_WEBHOOK_SECRET` — for webhook signature verification.
+```
+Key (admin_id)=(3f8d38ff-…) is not present in table "admin_users".
+```
 
-`RAZORPAY_KEY_ID` is also exposed back to the frontend via the create-order function's response (not hardcoded in client), so we don't need a `VITE_` variable.
+This blocks both the old and the new Razorpay flow.
 
-## Database changes (single migration)
-1. Add columns to `orders`:
-   - `razorpay_order_id text`
-   - `razorpay_payment_id text`
-   - `razorpay_signature text`
-   - Index on `razorpay_order_id`.
-2. Keep existing PhonePe columns for historical orders (nullable). No data loss.
-3. Ensure `payment_transactions` has `provider text` (default `'razorpay'`) and stores raw webhook events for audit.
-4. Reconfirm RLS + GRANTs on `orders`, `order_items`, `payment_transactions` (user can read own; service_role full access for functions).
+### Fix
+Update `public.log_admin_activity()` to only log when the current user is actually an admin (skip silently otherwise). Same change protects the `products_audit_trigger` for any future non-admin product touches.
 
-## Edge Functions (3 new, replace `phonepe-payment`)
+```sql
+CREATE OR REPLACE FUNCTION public.log_admin_activity()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT EXISTS (
+    SELECT 1 FROM public.admin_users WHERE id = auth.uid()
+  ) THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
 
-### 1. `razorpay-create-order`
-- Auth: requires logged-in user (verify JWT via `getClaims`).
-- Input: `{ orderId }` (the row already inserted by the client in `orders` with status `pending`).
-- Server re-computes the amount from `order_items` × `products.price` (do NOT trust client-supplied amount — prevents price tampering).
-- Calls Razorpay `POST /v1/orders` with server-computed amount, currency `INR`, `receipt = orderId`.
-- Stores `razorpay_order_id` on the order row.
-- Returns `{ razorpayOrderId, amount, currency, keyId }` to client.
+  INSERT INTO public.activity_logs (admin_id, action, table_name, record_id, old_values, new_values)
+  VALUES (
+    auth.uid(),
+    TG_OP,
+    TG_TABLE_NAME,
+    COALESCE(NEW.id, OLD.id),
+    CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE NULL END,
+    CASE WHEN TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN to_jsonb(NEW) ELSE NULL END
+  );
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+```
 
-### 2. `razorpay-verify-payment`
-- Auth: requires logged-in user.
-- Input: `{ orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature }`.
-- Recomputes HMAC-SHA256 of `${razorpay_order_id}|${razorpay_payment_id}` using `RAZORPAY_KEY_SECRET` and compares (constant-time) with provided signature.
-- On match: update order `status = 'paid'`, store payment id + signature, insert `payment_transactions` row.
-- On mismatch: mark `status = 'failed'`, return 400.
+## Bug 2 — Cart page "Proceed to Checkout" button is dead
+`src/pages/CartPage.tsx` line 128 renders a button with no `onClick`. The cart drawer correctly opens the new Razorpay `CheckoutForm`, but the dedicated `/cart` page button does nothing — so users assume "old gateway / nothing happens".
 
-### 3. `razorpay-webhook` (public, no JWT)
-- Verifies `X-Razorpay-Signature` header against raw body using `RAZORPAY_WEBHOOK_SECRET`.
-- Handles `payment.captured`, `payment.failed`, `order.paid` — idempotent updates to `orders` keyed by `razorpay_order_id`.
-- Acts as a safety net if the user closes the browser before the verify call completes.
-- Logs every event into `payment_transactions`.
+### Fix
+Wire `CartPage` to the same `CheckoutForm` the drawer uses:
+- Add `useState` for `checkoutOpen`.
+- Make the button call `setCheckoutOpen(true)` (gated on `items.length > 0`).
+- Render `<CheckoutForm isOpen={checkoutOpen} onClose={() => setCheckoutOpen(false)} />`.
 
-All three functions include CORS headers and consume response bodies.
+No other code or schema changes. The Razorpay edge functions and `CheckoutForm` from the previous step stay as-is.
 
-## Frontend changes
-
-### `src/components/CheckoutForm.tsx`
-1. Insert pending order + order items (as today), but without the PhonePe transaction id.
-2. Call `razorpay-create-order` → get `{ razorpayOrderId, amount, currency, keyId }`.
-3. Dynamically load `https://checkout.razorpay.com/v1/checkout.js` (only when checkout opens).
-4. Open Razorpay Checkout with prefill from the shipping form (name, email, phone), theme color matching brand.
-5. In the `handler` callback, call `razorpay-verify-payment` with the returned ids + signature.
-6. On success → clear cart, redirect to `/payment-callback?orderId=...&status=success`.
-7. On dismiss/failure → keep order as `pending`/`failed`, show toast.
-
-### `src/pages/PaymentCallbackPage.tsx`
-- Simplify: just reads `orderId` + `status` from query and shows confirmation. No DB writes here (verification already happened server-side).
-
-### Cleanup
-- Remove/retire `supabase/functions/phonepe-payment/index.ts` (or leave for old orders; new flow won't call it).
-- Delete `PHONEPE_CLIENT_ID` / `PHONEPE_CLIENT_SECRET` from secrets after confirming no traffic.
-
-## Security checklist
-- Secret key never leaves edge functions.
-- Amount always recomputed server-side from DB before creating Razorpay order.
-- Signature verified with HMAC-SHA256, constant-time compare.
-- Webhook verified independently and idempotent.
-- All write endpoints require Supabase JWT (`getClaims`) except the webhook.
-- RLS prevents users from updating other users' orders; only edge functions (service_role) mutate `status`.
-- No secret values logged.
-
-## Verification after build
-1. Test mode keys: place an order with Razorpay test card `4111 1111 1111 1111` → order flips to `paid`.
-2. Failure card → order stays `failed`, cart not cleared.
-3. Tamper test: change amount in browser before submit → server recomputes, Razorpay order still uses correct amount.
-4. Webhook test via Razorpay dashboard → `payment_transactions` row inserted, order status idempotent.
-
-## Out of scope
-- Refunds UI (can be added later via a `razorpay-refund` function).
-- Saved cards / subscriptions.
-- Multi-currency (INR only for now).
-
-## What I need from you before building
-1. Confirm switch from PhonePe → Razorpay (PhonePe code retired for new orders).
-2. You'll provide Razorpay **Key ID**, **Key Secret**, and **Webhook Secret** when prompted via the secure secrets form.
-3. Confirm currency is INR.
+## Verification
+1. Open `/cart` → click **Proceed to Checkout** → checkout modal opens.
+2. Submit shipping form → Razorpay modal opens (no 409, no FK error).
+3. Pay with test card `4111 1111 1111 1111` → order flips to `paid`, redirect to success page.
