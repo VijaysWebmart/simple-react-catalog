@@ -9,6 +9,9 @@ import AdminPanel from './AdminPanel';
 import AuthPage from './AuthPage';
 import CartPage from './CartPage';
 import PaymentCallbackPage from './PaymentCallbackPage';
+import MyOrdersPage from './MyOrdersPage';
+import OrderDetailPage from './OrderDetailPage';
+import ProfilePage from './ProfilePage';
 
 const Index = () => {
   return (
@@ -23,6 +26,9 @@ const Index = () => {
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/payment-callback" element={<PaymentCallbackPage />} />
+        <Route path="/orders" element={<MyOrdersPage />} />
+        <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Routes>
     </div>
   );

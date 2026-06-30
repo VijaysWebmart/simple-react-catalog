@@ -58,15 +58,22 @@ const AuthenticatedHeader = () => {
                     )}
                   </button>
                   
-                  <div className="hidden md:flex items-center space-x-2">
-                    <User className="w-5 h-5 text-gray-600" />
-                    <span className="text-gray-700">Hi, {user.email}</span>
-                    <button
-                      onClick={handleLogout}
-                      className="ml-2 text-gray-600 hover:text-gray-900 transition-colors"
-                    >
-                      <LogOut className="w-5 h-5" />
+                  <div className="hidden md:block relative group">
+                    <button className="flex items-center space-x-2 text-gray-700 hover:text-gray-900">
+                      <User className="w-5 h-5" />
+                      <span className="max-w-[180px] truncate">{user.email}</span>
                     </button>
+                    <div className="absolute right-0 top-full pt-2 w-56 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity z-50">
+                      <div className="bg-white rounded-lg shadow-lg border py-2">
+                        <Link to="/orders" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Orders</Link>
+                        <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Profile</Link>
+                        <Link to="/cart" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Cart</Link>
+                        <div className="border-t my-1" />
+                        <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2">
+                          <LogOut className="w-4 h-4" /> Sign out
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -95,12 +102,12 @@ const AuthenticatedHeader = () => {
                 <Link to="/about" className="text-gray-600 hover:text-gray-900 transition-colors py-2">About</Link>
                 <Link to="/contact" className="text-gray-600 hover:text-gray-900 transition-colors py-2">Contact</Link>
                 {user && (
-                  <button
-                    onClick={handleLogout}
-                    className="text-left text-gray-600 hover:text-gray-900 transition-colors py-2"
-                  >
-                    Logout
-                  </button>
+                  <>
+                    <div className="border-t my-2" />
+                    <Link to="/orders" className="text-gray-600 hover:text-gray-900 transition-colors py-2">My Orders</Link>
+                    <Link to="/profile" className="text-gray-600 hover:text-gray-900 transition-colors py-2">My Profile</Link>
+                    <button onClick={handleLogout} className="text-left text-red-600 hover:text-red-700 transition-colors py-2">Logout</button>
+                  </>
                 )}
               </nav>
             </div>
