@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, MapPin, Plus } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../integrations/supabase/client';
 import { toast } from 'sonner';
+import AddressForm, { AddressInput } from './AddressForm';
 
 interface CheckoutFormProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface SavedAddress extends AddressInput {
+  id: string;
+  is_default: boolean;
 }
 
 declare global {
@@ -30,56 +36,64 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
   const { items, getCartTotal, clearCart } = useCartStore();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [shippingAddress, setShippingAddress] = useState({
-    fullName: '',
-    phone: '',
-    address: '',
-    city: '',
-    state: '',
-    pincode: ''
-  });
+  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [saveNew, setSaveNew] = useState(true);
 
   const total = getCartTotal();
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setShippingAddress({ ...shippingAddress, [e.target.name]: e.target.value });
-  };
+  useEffect(() => {
+    if (!isOpen || !user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
+      const list = (data as SavedAddress[]) || [];
+      setAddresses(list);
+      if (list.length > 0) {
+        const def = list.find(a => a.is_default) || list[0];
+        setSelectedId(def.id);
+        setShowNewForm(false);
+      } else {
+        setShowNewForm(true);
+      }
+    })();
+  }, [isOpen, user]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const placeOrder = async (shipping: AddressInput) => {
     if (!user) return;
-
     setLoading(true);
     try {
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) throw new Error('Failed to load Razorpay');
 
-      // Create pending order
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert([{
           user_id: user.id,
           total_amount: total,
           status: 'pending',
-          shipping_address: shippingAddress,
+          shipping_address: shipping as any,
         }])
         .select()
         .single();
       if (orderError) throw orderError;
 
-      // Order items
       const orderItems = items.map(item => ({
         order_id: order.id,
         product_id: item.product_id,
         quantity: item.quantity,
-        price: item.product?.price || 0
+        price: item.product?.price || 0,
       }));
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-      // Server-side: create Razorpay order
       const { data: rp, error: rpErr } = await supabase.functions.invoke('razorpay-create-order', {
-        body: { orderId: order.id }
+        body: { orderId: order.id },
       });
       if (rpErr || !rp?.razorpayOrderId) throw rpErr || new Error('Failed to create payment order');
 
@@ -91,9 +105,9 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
         name: 'Noorvi',
         description: `Order ${order.id.slice(0, 8)}`,
         prefill: {
-          name: shippingAddress.fullName,
+          name: shipping.full_name,
           email: user.email,
-          contact: shippingAddress.phone,
+          contact: shipping.phone,
         },
         notes: { order_id: order.id },
         theme: { color: '#16a34a' },
@@ -139,6 +153,21 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
     }
   };
 
+  const handleUseSaved = async () => {
+    const addr = addresses.find(a => a.id === selectedId);
+    if (!addr) { toast.error('Select an address'); return; }
+    const { id, is_default, ...shipping } = addr;
+    await placeOrder(shipping);
+  };
+
+  const handleSubmitNew = async (a: AddressInput) => {
+    if (saveNew && user) {
+      const isFirst = addresses.length === 0;
+      await (supabase as any).from('addresses').insert({ user_id: user.id, ...a, is_default: isFirst });
+    }
+    await placeOrder(a);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -151,54 +180,69 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input type="text" name="fullName" value={shippingAddress.fullName} onChange={handleInputChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-              <input type="tel" name="phone" value={shippingAddress.phone} onChange={handleInputChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-          </div>
-
+        <div className="p-6 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-            <textarea name="address" value={shippingAddress.address} onChange={handleInputChange} required rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2"><MapPin className="w-5 h-5" /> Shipping Address</h3>
+              {addresses.length > 0 && (
+                <button
+                  onClick={() => setShowNewForm(s => !s)}
+                  className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+                >
+                  {showNewForm ? 'Use saved address' : (<><Plus className="w-3.5 h-3.5" /> Use new address</>)}
+                </button>
+              )}
+            </div>
+
+            {!showNewForm && addresses.length > 0 && (
+              <div className="space-y-2">
+                {addresses.map(a => (
+                  <label key={a.id} className={`block border rounded-lg p-3 cursor-pointer transition ${selectedId === a.id ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <div className="flex items-start gap-3">
+                      <input type="radio" name="addr" checked={selectedId === a.id} onChange={() => setSelectedId(a.id)} className="mt-1" />
+                      <div className="text-sm flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900">{a.full_name}</p>
+                          {a.is_default && <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded">Default</span>}
+                        </div>
+                        <p className="text-gray-700">{a.phone}</p>
+                        <p className="text-gray-600">{a.address}, {a.city}, {a.state} - {a.pincode}</p>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {showNewForm && (
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <AddressForm
+                  onSubmit={handleSubmitNew}
+                  submitLabel={`Pay ₹${total.toFixed(2)} with Razorpay`}
+                  onCancel={addresses.length > 0 ? () => setShowNewForm(false) : undefined}
+                />
+                {user && (
+                  <label className="flex items-center gap-2 mt-3 text-sm text-gray-700">
+                    <input type="checkbox" checked={saveNew} onChange={e => setSaveNew(e.target.checked)} />
+                    Save this address for future orders
+                  </label>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input type="text" name="city" value={shippingAddress.city} onChange={handleInputChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          {!showNewForm && addresses.length > 0 && (
+            <div className="border-t pt-4">
+              <div className="flex justify-between text-lg font-semibold mb-4">
+                <span>Total Amount: ₹{total.toFixed(2)}</span>
+              </div>
+              <button onClick={handleUseSaved} disabled={loading || !selectedId}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-3 px-4 rounded-lg transition-colors font-medium">
+                {loading ? 'Processing...' : 'Pay with Razorpay'}
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-              <input type="text" name="state" value={shippingAddress.state} onChange={handleInputChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pincode</label>
-              <input type="text" name="pincode" value={shippingAddress.pincode} onChange={handleInputChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-          </div>
-
-          <div className="border-t pt-4">
-            <div className="flex justify-between text-lg font-semibold mb-4">
-              <span>Total Amount: ₹{total.toFixed(2)}</span>
-            </div>
-            <button type="submit" disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-3 px-4 rounded-lg transition-colors font-medium">
-              {loading ? 'Processing...' : 'Pay with Razorpay'}
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   );

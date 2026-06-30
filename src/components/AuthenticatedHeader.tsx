@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { ShoppingCart, User, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartStore } from '../store/cartStore';
+import { supabase } from '../integrations/supabase/client';
+import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import CartDrawer from './CartDrawer';
 import CheckoutForm from './CheckoutForm';
 
@@ -13,14 +15,24 @@ const AuthenticatedHeader = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
 
   useEffect(() => {
     if (user) {
       fetchCartItems();
+      (async () => {
+        const { data } = await supabase.from('profiles').select('avatar_url, full_name' as any).eq('id', user.id).maybeSingle();
+        if (data) {
+          setAvatarUrl((data as any).avatar_url || '');
+          setFullName((data as any).full_name || '');
+        }
+      })();
     }
   }, [user, fetchCartItems]);
 
   const cartItemsCount = items.reduce((total, item) => total + item.quantity, 0);
+  const initials = (fullName || user?.email || '?').slice(0, 2).toUpperCase();
 
   const handleLogout = async () => {
     await signOut();
@@ -60,8 +72,11 @@ const AuthenticatedHeader = () => {
                   
                   <div className="hidden md:block relative group">
                     <button className="flex items-center space-x-2 text-gray-700 hover:text-gray-900">
-                      <User className="w-5 h-5" />
-                      <span className="max-w-[180px] truncate">{user.email}</span>
+                      <Avatar className="w-8 h-8">
+                        {avatarUrl && <AvatarImage src={avatarUrl} alt="Avatar" />}
+                        <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">{initials}</AvatarFallback>
+                      </Avatar>
+                      <span className="max-w-[160px] truncate text-sm">{fullName || user.email}</span>
                     </button>
                     <div className="absolute right-0 top-full pt-2 w-56 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity z-50">
                       <div className="bg-white rounded-lg shadow-lg border py-2">
