@@ -113,6 +113,9 @@ const CartPage = () => {
             <div className="lg:col-span-1">
               <div className="bg-gray-50 p-6 rounded-lg sticky top-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
+                <div className="text-xs text-gray-600 mb-3">
+                  Saved addresses are used at checkout. <Link to="/profile" className="text-blue-600 hover:underline">Manage addresses</Link>
+                </div>
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
