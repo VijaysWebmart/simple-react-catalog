@@ -1,16 +1,18 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartStore } from '../store/cartStore';
 import Header from '../components/Header';
 import AuthenticatedHeader from '../components/AuthenticatedHeader';
 import Footer from '../components/Footer';
+import CheckoutForm from '../components/CheckoutForm';
 import { Plus, Minus, Trash2, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const CartPage = () => {
   const { user } = useAuth();
   const { items, loading, fetchCartItems, updateQuantity, removeFromCart, getCartTotal } = useCartStore();
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -125,7 +127,11 @@ const CartPage = () => {
                     <span>₹{total.toFixed(2)}</span>
                   </div>
                 </div>
-                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors">
+                <button
+                  onClick={() => setCheckoutOpen(true)}
+                  disabled={items.length === 0}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-lg font-medium transition-colors"
+                >
                   Proceed to Checkout
                 </button>
               </div>
@@ -133,6 +139,7 @@ const CartPage = () => {
           </div>
         )}
       </div>
+      <CheckoutForm isOpen={checkoutOpen} onClose={() => setCheckoutOpen(false)} />
       <Footer />
     </div>
   );
