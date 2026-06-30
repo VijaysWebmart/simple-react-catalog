@@ -9,13 +9,14 @@ const PaymentCallbackPage = () => {
 
   useEffect(() => {
     const s = searchParams.get('status');
+    const orderId = searchParams.get('order_id');
     if (s === 'success') {
       setStatus('success');
-      const t = setTimeout(() => navigate('/', { replace: true }), 3000);
+      const t = setTimeout(() => navigate(orderId ? `/orders/${orderId}` : '/orders', { replace: true }), 2500);
       return () => clearTimeout(t);
     } else {
       setStatus('failed');
-      const t = setTimeout(() => navigate('/products', { replace: true }), 3000);
+      const t = setTimeout(() => navigate('/cart', { replace: true }), 3000);
       return () => clearTimeout(t);
     }
   }, [searchParams, navigate]);
