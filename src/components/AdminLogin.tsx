@@ -130,7 +130,7 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Demo credentials: admin@example.com / admin123</p>
+          <p>Use your registered admin email and password to sign in.</p>
         </div>
       </div>
     </div>
