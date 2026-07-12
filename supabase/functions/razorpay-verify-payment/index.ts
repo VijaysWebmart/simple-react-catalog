@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401)
 
     const userClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -20,12 +20,12 @@ Deno.serve(async (req) => {
     )
     const token = authHeader.replace('Bearer ', '')
     const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token)
-    if (claimsErr || !claimsData?.claims) return json({ error: 'Unauthorized' }, 401)
+    if (claimsErr || !claimsData?.claims) return json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401)
     const userId = claimsData.claims.sub
 
     const { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = await req.json()
     if (!orderId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return json({ error: 'Missing fields' }, 400)
+      return json({ error: 'Missing fields', code: 'BAD_REQUEST' }, 400)
     }
 
     const admin = createClient(
@@ -38,17 +38,45 @@ Deno.serve(async (req) => {
       .select('id, user_id, razorpay_order_id, status, total_amount')
       .eq('id', orderId)
       .single()
-    if (orderErr || !order) return json({ error: 'Order not found' }, 404)
-    if (order.user_id !== userId) return json({ error: 'Forbidden' }, 403)
-    if (order.razorpay_order_id !== razorpay_order_id) return json({ error: 'Order mismatch' }, 400)
+    if (orderErr || !order) return json({ error: 'Order not found', code: 'ORDER_NOT_FOUND' }, 404)
+    if (order.user_id !== userId) return json({ error: 'Forbidden', code: 'FORBIDDEN' }, 403)
+    if (order.razorpay_order_id !== razorpay_order_id) return json({ error: 'Order mismatch', code: 'ORDER_MISMATCH' }, 400)
 
-    const expected = await hmacSha256Hex(
-      Deno.env.get('RAZORPAY_KEY_SECRET')!,
-      `${razorpay_order_id}|${razorpay_payment_id}`
-    )
+    // Idempotent: if already paid, return success without touching DB again
+    if (order.status === 'paid') {
+      return json({ success: true, alreadyPaid: true }, 200)
+    }
+
+    const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET')!
+    const keyId = Deno.env.get('RAZORPAY_KEY_ID')!
+
+    const expected = await hmacSha256Hex(keySecret, `${razorpay_order_id}|${razorpay_payment_id}`)
     if (!timingSafeEqual(expected, razorpay_signature)) {
       await admin.from('orders').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', orderId)
-      return json({ error: 'Invalid signature' }, 400)
+      return json({ error: 'Invalid signature', code: 'BAD_SIGNATURE' }, 400)
+    }
+
+    // Cross-verify amount/currency/status by fetching the payment from Razorpay
+    const basic = btoa(`${keyId}:${keySecret}`)
+    const payRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+      headers: { 'Authorization': `Basic ${basic}` },
+    })
+    const payment = await payRes.json()
+    if (!payRes.ok) {
+      console.error('Fetch payment failed', payment)
+      return json({ error: 'Could not verify payment with gateway', code: 'GATEWAY_FETCH_FAILED' }, 502)
+    }
+
+    const expectedAmount = Math.round(Number(order.total_amount) * 100)
+    if (payment.order_id !== razorpay_order_id) {
+      return json({ error: 'Payment/order mismatch', code: 'PAYMENT_ORDER_MISMATCH' }, 400)
+    }
+    if (payment.amount !== expectedAmount || payment.currency !== 'INR') {
+      console.error('Amount/currency mismatch', { payment, expectedAmount })
+      return json({ error: 'Amount or currency mismatch', code: 'AMOUNT_MISMATCH' }, 400)
+    }
+    if (payment.status !== 'captured' && payment.status !== 'authorized') {
+      return json({ error: `Payment not captured (status=${payment.status})`, code: 'NOT_CAPTURED' }, 400)
     }
 
     await admin
@@ -61,20 +89,30 @@ Deno.serve(async (req) => {
       })
       .eq('id', orderId)
 
-    await admin.from('payment_transactions').insert({
-      order_id: orderId,
-      transaction_id: razorpay_payment_id,
-      gateway: 'razorpay',
-      amount: order.total_amount,
-      currency: 'INR',
-      status: 'paid',
-      gateway_response: { razorpay_order_id, razorpay_payment_id, source: 'client_verify' },
-    })
+    // Insert transaction only if not already recorded (idempotency without a DB constraint)
+    const { data: existingTxn } = await admin
+      .from('payment_transactions')
+      .select('id')
+      .eq('transaction_id', razorpay_payment_id)
+      .eq('status', 'paid')
+      .maybeSingle()
+
+    if (!existingTxn) {
+      await admin.from('payment_transactions').insert({
+        order_id: orderId,
+        transaction_id: razorpay_payment_id,
+        gateway: 'razorpay',
+        amount: order.total_amount,
+        currency: 'INR',
+        status: 'paid',
+        gateway_response: { razorpay_order_id, razorpay_payment_id, source: 'client_verify' },
+      })
+    }
 
     return json({ success: true }, 200)
   } catch (e) {
     console.error('verify error', e)
-    return json({ error: 'Internal error' }, 500)
+    return json({ error: (e as Error).message || 'Internal error', code: 'INTERNAL' }, 500)
   }
 })
 

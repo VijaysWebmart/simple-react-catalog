@@ -54,15 +54,37 @@ Deno.serve(async (req) => {
           .eq('id', order.id)
       }
 
-      await admin.from('payment_transactions').insert({
-        order_id: order.id,
-        transaction_id: payment?.id ?? null,
-        gateway: 'razorpay',
-        amount: (payment?.amount ?? 0) / 100,
-        currency: payment?.currency ?? 'INR',
-        status: newStatus ?? event.event,
-        gateway_response: { event: event.event, payload: event.payload, source: 'webhook' },
-      })
+      // Idempotency: skip insert if a row with the same transaction_id + status already exists
+      const txnId = payment?.id ?? null
+      const txnStatus = newStatus ?? event.event
+      let alreadyRecorded = false
+      if (txnId) {
+        const { data: existing } = await admin
+          .from('payment_transactions')
+          .select('id')
+          .eq('transaction_id', txnId)
+          .eq('status', txnStatus)
+          .maybeSingle()
+        alreadyRecorded = !!existing
+      }
+
+      if (!alreadyRecorded) {
+        await admin.from('payment_transactions').insert({
+          order_id: order.id,
+          transaction_id: txnId,
+          gateway: 'razorpay',
+          amount: (payment?.amount ?? 0) / 100,
+          currency: payment?.currency ?? 'INR',
+          status: txnStatus,
+          gateway_response: {
+            event: event.event,
+            payload: event.payload,
+            source: 'webhook',
+            error_code: payment?.error_code ?? null,
+            error_description: payment?.error_description ?? null,
+          },
+        })
+      }
     }
 
     return new Response('ok', { status: 200, headers: corsHeaders })
