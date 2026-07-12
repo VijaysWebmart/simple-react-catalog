@@ -64,6 +64,21 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
     })();
   }, [isOpen, user]);
 
+  const extractInvokeError = async (err: any): Promise<string | null> => {
+    try {
+      if (!err) return null;
+      if (typeof err === 'string') return err;
+      const ctx = err.context;
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.json();
+        return body?.error || body?.message || null;
+      }
+      return err.message || null;
+    } catch {
+      return null;
+    }
+  };
+
   const placeOrder = async (shipping: AddressInput) => {
     if (!user) return;
     setLoading(true);
@@ -95,60 +110,93 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
       const { data: rp, error: rpErr } = await supabase.functions.invoke('razorpay-create-order', {
         body: { orderId: order.id },
       });
-      if (rpErr || !rp?.razorpayOrderId) throw rpErr || new Error('Failed to create payment order');
+      if (rpErr || !rp?.razorpayOrderId) {
+        const msg = (await extractInvokeError(rpErr)) || 'Failed to create payment order';
+        throw new Error(msg);
+      }
 
-      const options = {
-        key: rp.keyId,
-        amount: rp.amount,
-        currency: rp.currency,
-        order_id: rp.razorpayOrderId,
-        name: 'Noorvi',
-        description: `Order ${order.id.slice(0, 8)}`,
-        prefill: {
-          name: shipping.full_name,
-          email: user.email,
-          contact: shipping.phone,
-        },
-        notes: { order_id: order.id },
-        theme: { color: '#16a34a' },
-        handler: async (response: any) => {
-          try {
-            const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
-              'razorpay-verify-payment',
-              {
-                body: {
-                  orderId: order.id,
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                },
-              }
-            );
-            if (verifyError || !verifyData?.success) throw verifyError || new Error('Verification failed');
-            await clearCart();
-            window.location.href = `/payment-callback?orderId=${order.id}&status=success`;
-          } catch (err) {
-            console.error('Verify error', err);
-            window.location.href = `/payment-callback?orderId=${order.id}&status=failed`;
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            toast.error('Payment cancelled');
-            setLoading(false);
+      const openCheckout = () => {
+        const options = {
+          key: rp.keyId,
+          amount: rp.amount,
+          currency: rp.currency,
+          order_id: rp.razorpayOrderId,
+          name: 'Noorvi',
+          description: `Order ${order.id.slice(0, 8)}`,
+          prefill: {
+            name: shipping.full_name,
+            email: user.email,
+            contact: shipping.phone,
           },
-        },
+          notes: { order_id: order.id },
+          theme: { color: '#16a34a' },
+          handler: async (response: any) => {
+            try {
+              const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
+                'razorpay-verify-payment',
+                {
+                  body: {
+                    orderId: order.id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                  },
+                }
+              );
+              if (verifyError || !verifyData?.success) {
+                const msg = (await extractInvokeError(verifyError)) || 'Verification failed';
+                throw new Error(msg);
+              }
+              await clearCart();
+              window.location.href = `/payment-callback?order_id=${order.id}&status=success`;
+            } catch (err) {
+              console.error('Verify error', err);
+              window.location.href = `/payment-callback?order_id=${order.id}&status=failed`;
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              setLoading(false);
+              toast('Payment cancelled', {
+                description: 'Click to resume payment for this order.',
+                action: {
+                  label: 'Resume',
+                  onClick: () => {
+                    setLoading(true);
+                    openCheckout();
+                  },
+                },
+              });
+            },
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', async (resp: any) => {
+          const err = resp?.error || {};
+          try {
+            await supabase.functions.invoke('razorpay-mark-failed', {
+              body: {
+                orderId: order.id,
+                razorpay_order_id: err.metadata?.order_id ?? rp.razorpayOrderId,
+                razorpay_payment_id: err.metadata?.payment_id ?? null,
+                code: err.code ?? null,
+                reason: err.description ?? null,
+              },
+            });
+          } catch (e) {
+            console.error('mark-failed error', e);
+          }
+          setLoading(false);
+          window.location.href = `/payment-callback?order_id=${order.id}&status=failed`;
+        });
+        rzp.open();
       };
 
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', () => {
-        toast.error('Payment failed. Please try again.');
-        setLoading(false);
-      });
-      rzp.open();
-    } catch (error) {
+      openCheckout();
+    } catch (error: any) {
       console.error('Error creating order:', error);
-      toast.error('Failed to initiate payment. Please try again.');
+      toast.error(error?.message || 'Failed to initiate payment. Please try again.');
       setLoading(false);
     }
   };
