@@ -21,42 +21,16 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
     setIsLoading(true);
 
     try {
-      // Check admin credentials
-      const { data: adminUser, error } = await supabase
-        .from('admin_users')
-        .select('*')
-        .eq('email', formData.email)
-        .eq('is_active', true)
-        .single();
+      const { data, error } = await supabase.functions.invoke('admin-login', {
+        body: { email: formData.email, password: formData.password },
+      });
 
-      if (error || !adminUser) {
-        toast.error('Invalid credentials');
+      if (error || !data?.adminUser) {
+        toast.error(data?.error || 'Invalid credentials');
         return;
       }
 
-      // Verify password against stored value
-      if (!adminUser.password_hash || formData.password !== adminUser.password_hash) {
-        toast.error('Invalid credentials');
-        return;
-      }
-
-      // Update last login
-      await supabase
-        .from('admin_users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', adminUser.id);
-
-      // Log admin login activity
-      await supabase
-        .from('activity_logs')
-        .insert({
-          admin_id: adminUser.id,
-          action: 'LOGIN',
-          table_name: 'admin_users',
-          record_id: adminUser.id,
-          new_values: { login_time: new Date().toISOString() }
-        });
-
+      const adminUser = data.adminUser;
       localStorage.setItem('adminAuth', 'true');
       localStorage.setItem('adminUser', JSON.stringify(adminUser));
       toast.success('Login successful!');
