@@ -13,7 +13,10 @@ Deno.serve(async (req) => {
 
   try {
     const { email, password } = await req.json();
-    if (!email || !password) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedPassword = String(password || "");
+
+    if (!normalizedEmail || !normalizedPassword) {
       return new Response(JSON.stringify({ error: "Email and password required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -28,7 +31,7 @@ Deno.serve(async (req) => {
     const { data: adminUser, error } = await supabase
       .from("admin_users")
       .select("*")
-      .eq("email", email)
+      .eq("email", normalizedEmail)
       .eq("is_active", true)
       .maybeSingle();
 
@@ -44,12 +47,12 @@ Deno.serve(async (req) => {
     if (adminUser.password_hash.startsWith("$2")) {
       const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
       try {
-        valid = await bcrypt.compare(password, adminUser.password_hash);
+        valid = await bcrypt.compare(normalizedPassword, adminUser.password_hash);
       } catch {
         valid = false;
       }
     } else {
-      valid = password === adminUser.password_hash;
+      valid = normalizedPassword === adminUser.password_hash;
     }
 
     if (!valid) {
