@@ -12,6 +12,7 @@ import PaymentCallbackPage from './PaymentCallbackPage';
 import MyOrdersPage from './MyOrdersPage';
 import OrderDetailPage from './OrderDetailPage';
 import ProfilePage from './ProfilePage';
+import AdminResetPasswordPage from './AdminResetPasswordPage';
 
 const Index = () => {
   return (
@@ -24,6 +25,7 @@ const Index = () => {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/payment-callback" element={<PaymentCallbackPage />} />
         <Route path="/orders" element={<MyOrdersPage />} />

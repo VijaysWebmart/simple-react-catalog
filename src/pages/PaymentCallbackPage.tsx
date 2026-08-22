@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 
 const PaymentCallbackPage = () => {
@@ -14,12 +14,16 @@ const PaymentCallbackPage = () => {
       setStatus('success');
       const t = setTimeout(() => navigate(orderId ? `/orders/${orderId}` : '/orders', { replace: true }), 2500);
       return () => clearTimeout(t);
-    } else {
+    } else if (s === 'failed') {
       setStatus('failed');
-      const t = setTimeout(() => navigate('/cart', { replace: true }), 3000);
-      return () => clearTimeout(t);
     }
   }, [searchParams, navigate]);
+
+  const rawReason = searchParams.get('reason') || '';
+  const domesticOnly = rawReason.toLowerCase().includes('domestic') || rawReason.toLowerCase().includes('indian');
+  const failureMessage = domesticOnly
+    ? 'This Razorpay test account accepts Indian payment methods only. Retry with an Indian-issued test card, UPI, or another enabled test method.'
+    : rawReason || 'The payment was declined. Please retry or choose another payment method.';
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -42,8 +46,11 @@ const PaymentCallbackPage = () => {
           <>
             <XCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Payment Failed</h2>
-            <p className="text-gray-600 mb-4">Please try again.</p>
-            <p className="text-sm text-gray-500">Redirecting to products page...</p>
+            <p className="text-gray-600 mb-6">{failureMessage}</p>
+            <div className="flex gap-3 justify-center">
+              <Link to="/cart" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Try again</Link>
+              <Link to="/orders" className="border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg">View orders</Link>
+            </div>
           </>
         )}
       </div>

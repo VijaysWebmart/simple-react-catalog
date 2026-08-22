@@ -10,6 +10,7 @@ import ProductForm from '../components/ProductForm';
 import SliderForm from '../components/SliderForm';
 import { useProductStore } from '../store/productStore';
 import { useSliderStore } from '../store/sliderStore';
+import { supabase } from '../integrations/supabase/client';
 
 const AdminPanel = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -23,13 +24,17 @@ const AdminPanel = () => {
   const [editingSlider, setEditingSlider] = useState(null);
 
   useEffect(() => {
-    const authStatus = localStorage.getItem('adminAuth');
-    const storedUser = localStorage.getItem('adminUser');
-    
-    if (authStatus === 'true' && storedUser) {
+    let active = true;
+    const verifyAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase.functions.invoke('admin-login');
+      if (!active || error || !data?.adminUser) return;
       setIsAuthenticated(true);
-      setAdminUser(JSON.parse(storedUser));
-    }
+      setAdminUser(data.adminUser);
+    };
+    verifyAdmin();
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -44,9 +49,8 @@ const AdminPanel = () => {
     setAdminUser(userData);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminAuth');
-    localStorage.removeItem('adminUser');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
     setAdminUser(null);
     setActiveTab('dashboard');
