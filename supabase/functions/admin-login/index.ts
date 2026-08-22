@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,16 +12,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, password } = await req.json();
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-    const normalizedPassword = String(password || "");
-
-    if (!normalizedEmail || !normalizedPassword) {
-      return new Response(JSON.stringify({ error: "Email and password required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ error: "Unauthorized" }, 401);
     }
+
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    const normalizedEmail = user?.email?.trim().toLowerCase();
+    if (userError || !user || !normalizedEmail) return json({ error: "Unauthorized" }, 401);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -35,31 +38,8 @@ Deno.serve(async (req) => {
       .eq("is_active", true)
       .maybeSingle();
 
-    if (error || !adminUser || !adminUser.password_hash) {
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Support both plain text (legacy) and bcrypt hashes
-    let valid = false;
-    if (adminUser.password_hash.startsWith("$2")) {
-      const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
-      try {
-        valid = await bcrypt.compare(normalizedPassword, adminUser.password_hash);
-      } catch {
-        valid = false;
-      }
-    } else {
-      valid = normalizedPassword === adminUser.password_hash;
-    }
-
-    if (!valid) {
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (error || !adminUser || !["admin", "super_admin"].includes(adminUser.role)) {
+      return json({ error: "Admin access required" }, 403);
     }
 
     await supabase
@@ -67,16 +47,17 @@ Deno.serve(async (req) => {
       .update({ last_login: new Date().toISOString() })
       .eq("id", adminUser.id);
 
-    const { password_hash, ...safeUser } = adminUser;
-    return new Response(JSON.stringify({ adminUser: safeUser }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const { password_hash: _passwordHash, ...safeUser } = adminUser;
+    return json({ adminUser: { ...safeUser, auth_user_id: user.id } }, 200);
   } catch (e) {
     console.error("admin-login error", e);
-    return new Response(JSON.stringify({ error: "Login failed" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "Login failed" }, 500);
   }
 });
+
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

@@ -68,12 +68,13 @@ Deno.serve(async (req) => {
       .eq('order_id', orderId)
     if (itemsErr || !items?.length) return json({ error: 'No order items', code: 'NO_ITEMS' }, 400)
 
-    let totalRupees = 0
+    let rawTotalRupees = 0
     for (const it of items as any[]) {
       const unit = Number(it.product?.price ?? it.price)
       if (!Number.isFinite(unit) || unit <= 0) return json({ error: 'Invalid price', code: 'BAD_PRICE' }, 400)
-      totalRupees += unit * Number(it.quantity)
+      rawTotalRupees += unit * Number(it.quantity)
     }
+    const totalRupees = Math.round(rawTotalRupees * 100) / 100
     const amountPaise = Math.round(totalRupees * 100)
     if (amountPaise <= 0) return json({ error: 'Invalid amount', code: 'BAD_AMOUNT' }, 400)
 

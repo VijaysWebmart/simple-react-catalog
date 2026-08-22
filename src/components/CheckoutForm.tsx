@@ -174,21 +174,9 @@ const CheckoutForm = ({ isOpen, onClose }: CheckoutFormProps) => {
         const rzp = new window.Razorpay(options);
         rzp.on('payment.failed', async (resp: any) => {
           const err = resp?.error || {};
-          try {
-            await supabase.functions.invoke('razorpay-mark-failed', {
-              body: {
-                orderId: order.id,
-                razorpay_order_id: err.metadata?.order_id ?? rp.razorpayOrderId,
-                razorpay_payment_id: err.metadata?.payment_id ?? null,
-                code: err.code ?? null,
-                reason: err.description ?? null,
-              },
-            });
-          } catch (e) {
-            console.error('mark-failed error', e);
-          }
+          const reason = String(err.description || 'The payment was declined. Please try another payment method.');
           setLoading(false);
-          window.location.href = `/payment-callback?order_id=${order.id}&status=failed`;
+          window.location.href = `/payment-callback?order_id=${order.id}&status=failed&reason=${encodeURIComponent(reason)}`;
         });
         rzp.open();
       };

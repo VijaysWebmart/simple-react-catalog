@@ -15,24 +15,31 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('admin-login', {
-        body: { email: formData.email.trim().toLowerCase(), password: formData.password },
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
       });
+      if (signInError) {
+        toast.error('Invalid credentials');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('admin-login');
 
       if (error || !data?.adminUser) {
-        toast.error(data?.error || 'Invalid credentials');
+        await supabase.auth.signOut();
+        toast.error(data?.error || 'Admin access required');
         return;
       }
 
       const adminUser = data.adminUser;
-      localStorage.setItem('adminAuth', 'true');
-      localStorage.setItem('adminUser', JSON.stringify(adminUser));
       toast.success('Login successful!');
       onLogin(adminUser);
     } catch (error) {
@@ -41,6 +48,24 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    const email = formData.email.trim().toLowerCase();
+    if (!email) {
+      toast.error('Enter your super-admin email first');
+      return;
+    }
+    setIsResetting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/admin/reset-password`,
+    });
+    setIsResetting(false);
+    if (error) {
+      toast.error('Unable to send reset email. Please try again.');
+      return;
+    }
+    toast.success('If that super-admin account exists, a reset link has been sent.');
   };
 
   return (
@@ -94,6 +119,17 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+          </div>
+
+          <div className="text-right">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={isResetting}
+              className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+            >
+              {isResetting ? 'Sending reset link...' : 'Forgot password?'}
+            </button>
           </div>
 
           <button
