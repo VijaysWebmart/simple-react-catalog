@@ -15,10 +15,9 @@ const AdminResetPasswordPage = () => {
   useEffect(() => {
     let active = true;
     const checkRecovery = async () => {
-      const isRecoveryLink = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';
       const { data: { session } } = await supabase.auth.getSession();
       if (active) {
-        setValidRecovery(Boolean(isRecoveryLink || session));
+        setValidRecovery(Boolean(session));
         setChecking(false);
       }
     };

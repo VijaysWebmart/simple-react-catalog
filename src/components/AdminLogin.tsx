@@ -28,6 +28,7 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
       });
       if (signInError) {
         toast.error('Invalid credentials');
+        setIsLoading(false);
         return;
       }
 
@@ -36,6 +37,7 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
       if (error || !data?.adminUser) {
         await supabase.auth.signOut();
         toast.error(data?.error || 'Admin access required');
+        setIsLoading(false);
         return;
       }
 
