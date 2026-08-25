@@ -14,6 +14,7 @@ import { supabase } from '../integrations/supabase/client';
 
 const AdminPanel = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [adminUser, setAdminUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const { products, fetchProducts, deleteProduct } = useProductStore();
@@ -27,11 +28,20 @@ const AdminPanel = () => {
     let active = true;
     const verifyAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        if (active) setIsCheckingAuth(false);
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('admin-login');
-      if (!active || error || !data?.adminUser) return;
+      if (!active) return;
+      if (error || !data?.adminUser) {
+        await supabase.auth.signOut();
+        setIsCheckingAuth(false);
+        return;
+      }
       setIsAuthenticated(true);
       setAdminUser(data.adminUser);
+      setIsCheckingAuth(false);
     };
     verifyAdmin();
     return () => { active = false; };
@@ -87,6 +97,10 @@ const AdminPanel = () => {
     setShowSliderForm(false);
     setEditingSlider(null);
   };
+
+  if (isCheckingAuth) {
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-600">Checking admin access...</div>;
+  }
 
   if (!isAuthenticated) {
     return <AdminLogin onLogin={handleLogin} />;
