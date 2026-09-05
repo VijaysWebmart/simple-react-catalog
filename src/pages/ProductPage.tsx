@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 
 const ProductPage = () => {
   const { id } = useParams<{ id: string }>();
-  const { products, fetchProducts } = useProductStore();
+  const { products } = useProductStore();
   const { addToCart } = useCartStore();
   const { user } = useAuth();
   const [product, setProduct] = useState<any>(null);
