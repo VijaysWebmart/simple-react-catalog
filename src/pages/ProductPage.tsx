@@ -20,20 +20,37 @@ const ProductPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadProduct = async () => {
-      if (products.length === 0) {
-        await fetchProducts();
+      if (!id) return;
+      setLoading(true);
+
+      const existing = products.find(p => p.id === id);
+      if (existing) {
+        setProduct(existing);
+        setLoading(false);
+        return;
       }
-      
-      const foundProduct = products.find(p => p.id === id);
-      setProduct(foundProduct);
-      setLoading(false);
+
+      const { data } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (!cancelled) {
+        setProduct(data ?? null);
+        setLoading(false);
+      }
     };
 
-    if (id) {
-      loadProduct();
-    }
-  }, [id, products, fetchProducts]);
+    loadProduct();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, products]);
+
 
   const handleAddToCart = async () => {
     if (!user) {
