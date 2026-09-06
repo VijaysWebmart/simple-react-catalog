@@ -15,8 +15,18 @@ const AuthPage = () => {
     fullName: ''
   });
 
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    const { error } = await signInWithGoogle();
+    if (error) {
+      toast.error(error.message);
+      setLoading(false);
+    }
+    // On success the browser redirects to Google; no further action needed here.
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
