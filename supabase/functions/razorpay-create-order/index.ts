@@ -94,8 +94,6 @@ Deno.serve(async (req) => {
 
     await admin.from('orders').update({ total_amount: totalRupees }).eq('id', orderId)
 
-    const basic = btoa(`${keyId}:${keySecret}`)
-
     // If we already created a Razorpay order for this pending order, try to reuse it
     if (order.razorpay_order_id) {
       const existing = await fetch(`https://api.razorpay.com/v1/orders/${order.razorpay_order_id}`, {
