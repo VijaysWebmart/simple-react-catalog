@@ -46,6 +46,20 @@ Deno.serve(async (req) => {
     }
     console.log(`[create-order] mode=${isTestKey ? 'test' : 'live'} keyPrefix=${keyId.substring(0, 8)}`)
 
+    // Pre-flight credential check: fail fast with a clear message if Razorpay rejects the key pair
+    const basic = btoa(`${keyId}:${keySecret}`)
+    const preflight = await fetch('https://api.razorpay.com/v1/orders?count=1', {
+      headers: { 'Authorization': `Basic ${basic}` },
+    })
+    if (preflight.status === 401 || preflight.status === 400) {
+      const pfJson = await preflight.json().catch(() => null)
+      console.error('Razorpay credential preflight failed', preflight.status, pfJson)
+      return json({
+        error: 'Razorpay rejected the stored API keys (Authentication failed). Please re-check that RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are a matching pair from the same Razorpay account and mode (test/live).',
+        code: 'RAZORPAY_AUTH_FAILED',
+      }, 500)
+    }
+
     const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -79,8 +93,6 @@ Deno.serve(async (req) => {
     if (amountPaise <= 0) return json({ error: 'Invalid amount', code: 'BAD_AMOUNT' }, 400)
 
     await admin.from('orders').update({ total_amount: totalRupees }).eq('id', orderId)
-
-    const basic = btoa(`${keyId}:${keySecret}`)
 
     // If we already created a Razorpay order for this pending order, try to reuse it
     if (order.razorpay_order_id) {
